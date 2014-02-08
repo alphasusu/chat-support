@@ -4,11 +4,12 @@
  */
 
 var express = require('express');
-var routes = require('./routes');
-var http = require('http');
-var path = require('path');
-
 var app = express();
+var routes = require('./routes');
+var server = require('http').createServer(app);
+var path = require('path');
+var io = require('socket.io').listen(server);
+var crypto = require('crypto');
 
 // all environments
 app.set('port', process.env.PORT || 4000);
@@ -23,8 +24,32 @@ if ('development' == app.get('env')) {
   app.use(express.errorHandler());
 }
 
-app.get('/', routes.index);
+app.get('/', function(req, res) {
+    crypto.randomBytes(48, function(ex, buf) {
+        var token = buf.toString('hex');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.json({channel: token});
+    });
+});
 
-http.createServer(app).listen(app.get('port'), function(){
+server.listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
+});
+
+io.sockets.on('connection', function (socket) {
+
+    socket.on('join room', function(data) {
+        console.log("Socket joining room " + data.room);
+        socket.room = data.room;
+        socket.join(data.room);
+    });
+
+    socket.on('message', function(data) {
+        io.sockets.in(socket.room).emit('message', data);
+    });
+
+    socket.on('disconnect', function() {
+        socket.leave(socket.room);
+    });
+
 });
